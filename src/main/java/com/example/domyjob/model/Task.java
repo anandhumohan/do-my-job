@@ -13,8 +13,8 @@ public class Task {
 
     private String name;
     private String description;
-    private String cronExpression; // For scheduled tasks
-    private String taskType; // E.g., "EMAIL", "DB_UPDATE"
+    private String cronExpression;
+    private String taskType;
 
     public Long getId() {
         return id;

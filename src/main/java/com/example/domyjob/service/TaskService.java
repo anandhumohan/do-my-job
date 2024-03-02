@@ -55,9 +55,7 @@ public class TaskService {
         message.setText(messageContent);
         try {
             mailSender.send(message);
-            // Log success or additional actions
         } catch (MailException e) {
-            // Log failure or take corrective action
             e.printStackTrace();
         }
     }
