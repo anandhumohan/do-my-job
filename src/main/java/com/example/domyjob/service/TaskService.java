@@ -1,7 +1,10 @@
 package com.example.domyjob.service;
 
+import com.example.domyjob.dto.EmailDetailsDTO;
 import com.example.domyjob.dto.TaskRequest;
+import com.example.domyjob.model.Invoice;
 import com.example.domyjob.model.Task;
+import com.example.domyjob.repository.InvoiceRepository;
 import com.example.domyjob.repository.TaskRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.MailException;
@@ -22,47 +25,31 @@ public class TaskService {
     private TaskRepository taskRepository;
 
     @Autowired
-    private JavaMailSender mailSender; // For EMAIL tasks
+    private InvoiceRepository invoiceRepository;
 
     @Autowired
-    private TaskScheduler taskScheduler;
+    private JavaMailSender mailSender;
 
-    public void scheduleNewTask(Task task) {
-        Runnable taskRunnable = createRunnableForTask(task);
-        CronTrigger cronTrigger = new CronTrigger(task.getCronExpression());
-        taskScheduler.schedule(taskRunnable, cronTrigger);
-    }
-
-    private Runnable createRunnableForTask(Task task) {
-        return () -> {
-            switch (task.getTaskType()) {
-                case "EMAIL":
-                    sendEmailNotification(task.getDescription()); // Assume this method sends an email
-                    break;
-                case "DB_UPDATE":
-                    updateDatabase(task.getDescription()); // Custom method to update DB
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unsupported task type: " + task.getTaskType());
-            }
-        };
-    }
-
-    private void sendEmailNotification(String messageContent) {
+    public void sendEmailNotification(EmailDetailsDTO emailDetails) {
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo("recipient@example.com"); // Configure the recipient dynamically if needed
+        message.setTo(emailDetails.getRecipient());
+        message.setFrom("anandhumohan5@gmail.com");
         message.setSubject("Notification");
-        message.setText(messageContent);
+        message.setText(emailDetails.getBody());
         try {
             mailSender.send(message);
         } catch (MailException e) {
-            e.printStackTrace();
+            System.out.print(e.getMessage());
         }
     }
 
-    private void updateDatabase(String description) {
-        int updatedCount = taskRepository.updateStatus("COMPLETED", description);
-        System.out.println(updatedCount + " tasks were marked as COMPLETED.");
+
+    public void updateInvoiceStatusToPaid() {
+        List<Invoice> pendingInvoices = invoiceRepository.findPendingInvoicesWithFullPayment();
+        for (Invoice invoice : pendingInvoices) {
+            invoice.setStatus("Paid");
+            invoiceRepository.save(invoice);
+        }
     }
 
 }
