@@ -1,12 +1,8 @@
 package com.example.domyjob.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -18,7 +14,8 @@ public class JobChain {
 
     private String workflowName;
     private LocalDateTime scheduleTime;
-    private List<Task> tasks;
+
+    private String taskIds;
 
     public Long getId() {
         return id;
@@ -44,11 +41,11 @@ public class JobChain {
         this.scheduleTime = scheduleTime;
     }
 
-    public List<Task> getTasks() {
-        return tasks;
+    public String getTaskIds() {
+        return taskIds;
     }
 
-    public void setTasks(List<Task> tasks) {
-        this.tasks = tasks;
+    public void setTaskIds(String taskIds) {
+        this.taskIds = taskIds;
     }
 }

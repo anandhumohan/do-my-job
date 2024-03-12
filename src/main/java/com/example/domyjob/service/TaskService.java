@@ -1,26 +1,26 @@
 package com.example.domyjob.service;
 
-import com.example.domyjob.dto.EmailDetailsDTO;
-import com.example.domyjob.dto.TaskRequest;
 import com.example.domyjob.model.Invoice;
 import com.example.domyjob.model.JobChain;
 import com.example.domyjob.model.Task;
 import com.example.domyjob.repository.InvoiceRepository;
 import com.example.domyjob.repository.JobChainRepository;
 import com.example.domyjob.repository.TaskRepository;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.TaskScheduler;
-import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.ZonedDateTime;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.ScheduledFuture;
 
 @Service
 public class TaskService {
@@ -35,52 +35,86 @@ public class TaskService {
     private JavaMailSender mailSender;
 
     @Autowired
+    private TaskScheduler taskScheduler;
+
+    // Keeps track of scheduled tasks
+    private ScheduledFuture<?> scheduledTask;
+
+    @Autowired
     private JobChainRepository jobChainRepository;
     public void scheduleJobChain(JobChain jobChain) {
         jobChainRepository.save(jobChain);
     }
 
-    // This method will be triggered based on a fixed delay and check for job chains to run
-    @Scheduled(fixedDelayString = "${job.chain.fixed.delay:60000}") // Value from properties or default to 60 seconds
-    public void runScheduledJobChains() {
-        List<JobChain> jobChainsToRun = jobChainRepository.findAll();
-        ZonedDateTime now = ZonedDateTime.now();
-
-        for (JobChain jobChain : jobChainsToRun) {
-            // Assuming one-time execution, for recurring tasks you would use the cron expression
-            if (jobChain.getScheduledTime() != null && jobChain.getScheduledTime().isBefore(now)) {
+    @PostConstruct
+    public void scheduleRunnableWithCronTrigger() {
+        Runnable task = () -> {
+            JobChain jobChain = jobChainRepository.findNextScheduledJobChain(LocalDateTime.now());
+            if (jobChain != null) {
                 executeJobChain(jobChain);
-                // After execution, remove the job chain or update its schedule
-                jobChainRepository.delete(jobChain); // For one-time execution
+                jobChainRepository.delete(jobChain);
             }
+        };
+
+        String cronExpression = getCronExpressionForNextJob();
+        if (cronExpression != null) {
+            CronTrigger cronTrigger = new CronTrigger(cronExpression, ZoneId.systemDefault());
+            scheduledTask = taskScheduler.schedule(task, cronTrigger);
         }
     }
 
-    // Logic to execute the job chain based on its configuration
+    private String getCronExpressionForNextJob() {
+        // Retrieve the next jobChain (if any) and convert its scheduleTime to a cron expression
+        JobChain nextJobChain = jobChainRepository.findNextScheduledJobChain(LocalDateTime.now());
+        if (nextJobChain != null) {
+            return convertLocalDateTimeToCron(nextJobChain.getScheduleTime());
+        }
+        return null;
+    }
+
+    private String convertLocalDateTimeToCron(LocalDateTime dateTime) {
+        return String.format("%d %d %d %d %d ?", dateTime.getSecond(), dateTime.getMinute(), dateTime.getHour(),
+                dateTime.getDayOfMonth(), dateTime.getMonthValue());
+    }
+
     private void executeJobChain(JobChain jobChain) {
-        // Extract and iterate over the tasks in the job chain
-        List<String> tasks = jobChain.getTaskNameList();
-        for (String taskName : tasks) {
-            switch (taskName) {
-                case "updateInvoiceStatus":
-                    updateInvoiceStatusToPaid(); // Call the existing method to update invoice statuses
-                    break;
-                case "sendEmailNotification":
-                    sendEmailNotification(new EmailDetailsDTO(/* details */)); // Call the existing method to send emails
-                    break;
-                default:
-                    // Handle unknown task names or log a warning
-                    break;
+        // Assuming jobChain.getTaskIds() returns a single String of comma-separated task IDs
+        String taskIdsString = jobChain.getTaskIds();
+        String[] taskIds = taskIdsString.split(",");
+
+        // Retrieve and execute each task by its ID
+        for (String taskId : taskIds) {
+            // Assuming you have a method to lookup Task details by taskId
+            Task task = getTaskById(taskId.trim()); // Trim to remove any leading or trailing spaces
+
+            if (task != null) { // Ensure task is found
+                switch (task.getType()) {
+                    case "DbUpdateTask":
+                        // Logic to execute DB update task
+                        updateInvoiceStatusToPaid(); // This method needs to be implemented based on your requirements
+                        break;
+                    case "EmailTask":
+                        // Extract details for email task and execute
+                        sendEmailNotification(task); // Adjust this method to accept Task object or extract details here
+                        break;
+                    default:
+                        System.out.println("Unsupported task type: " + task.getType());
+                        break;
+                }
+            } else {
+                System.out.println("Task not found for ID: " + taskId);
             }
         }
     }
 
-    public void sendEmailNotification(EmailDetailsDTO emailDetails) {
+
+
+    public void sendEmailNotification(Task task) {
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(emailDetails.getRecipient());
-        message.setFrom("anandhumohan5@gmail.com");
-        message.setSubject("Notification");
-        message.setText(emailDetails.getBody());
+        message.setTo(task.getToEmail());
+        message.setFrom(task.getFromEmail());
+        message.setSubject(task.getSubject());
+        message.setText(task.getBody());
         try {
             mailSender.send(message);
         } catch (MailException e) {
@@ -96,6 +130,11 @@ public class TaskService {
             invoice.setStatus("Paid");
             invoiceRepository.save(invoice);
         }
+    }
+
+    public Task getTaskById(String taskId) {
+        Optional<Task> taskOptional = taskRepository.findById(Long.valueOf(taskId));
+        return taskOptional.orElse(null);
     }
 
 }

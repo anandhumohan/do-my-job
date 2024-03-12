@@ -1,7 +1,7 @@
 package com.example.domyjob.controller;
 
-import com.example.domyjob.dto.EmailDetailsDTO;
 import com.example.domyjob.model.JobChain;
+import com.example.domyjob.model.Task;
 import com.example.domyjob.service.TaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -20,11 +20,12 @@ public class TaskController {
     }
 
     @PostMapping("/notify")
-    public void sendNotification(@RequestBody EmailDetailsDTO emailDetails) {
-        taskService.sendEmailNotification(emailDetails);
+    public void sendNotification(@RequestBody Task task) {
+        taskService.sendEmailNotification(task);
     }
 
     @PostMapping("/schedule")
+    @CrossOrigin(origins = "http://localhost:3000")
     public ResponseEntity<?> createJobChain(@RequestBody JobChain jobChain) {
         taskService.scheduleJobChain(jobChain);
         return ResponseEntity.ok().build();
